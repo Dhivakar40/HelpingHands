@@ -8,10 +8,16 @@
 .services-title {
   font-size: 80px;
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: 20px;
   color: #181a18;
   font-family: Arial, Helvetica, sans-serif;
   font-style: oblique;
+}
+
+.service-subtitle{
+    font-size:20px;
+    text-align:center;
+
 }
 
 .services-list {
@@ -25,7 +31,7 @@
   background-color: #f9fcfc;
   border-radius: 12px;
   box-shadow: 0 10px 12px rgba(0, 0, 0, 0.1);
-  padding: 150px;
+  padding: 30px;
   width: 260px;
   text-align: center;
   transition: transform 0.3s ease;

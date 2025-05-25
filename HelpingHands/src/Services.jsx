@@ -32,6 +32,7 @@ function Services(){
     return (
     <div className="services-page">
       <h2 className="services-title">Available Services</h2>
+      <h3 className="service-subtitle">One Step Away</h3>
       <div className="services-list">
         {services.map((service, index) => (
           <div key={index} className="service-card">
