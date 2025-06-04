@@ -11,20 +11,20 @@ body {
 }
 
 .bg-image {
-  background-image: url('C:\Users\dhiva\Desktop\Helping Hands\HelpingHands\src\assets\background2.png'); /* or use imported path */
+  background-image: url('C:\Users\dhiva\OneDrive\Desktop\Helping Hands\HelpingHands\src\assets\background2.png'); 
   background-size: cover;
   background-position: center;
-  position: fixed; /* Important to avoid content overlap */
+  position: fixed; 
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   z-index: -2;
-  filter: brightness(30%); /* Makes background lighter/dimmer */
+  filter: brightness(30%); 
 }
 
 .bg-overlay {
-  background-color: rgba(255, 255, 255, 0.3); /* White transparent overlay */
+  background-color: rgba(255, 255, 255, 0.3); 
   position: fixed;
   top: 0;
   left: 0;

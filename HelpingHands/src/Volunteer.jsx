@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './Volunteer.css';
+import axios from 'axios';
 
 function Volunteer() {
   const [formData, setFormData] = useState({
@@ -16,10 +17,25 @@ function Volunteer() {
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    alert('Thank you for registering as a volunteer!');
-  };
+  const handleSubmit = async (e) => {
+  e.preventDefault();
+  try {
+    await axios.post('http://localhost:5000/api/volunteer', formData);
+    alert('✅ Thank you for registering as a volunteer!');
+    setFormData({
+      name: '',
+      age: '',
+      phone: '',
+      email: '',
+      availability: '',
+      motivation: ''
+    });
+  } catch (error) {
+    console.error("❌ Error submitting form:", error);
+    alert('❌ There was an error. Please try again.');
+  }
+};
+
 
   return (
     <div className="volunteer-page">
