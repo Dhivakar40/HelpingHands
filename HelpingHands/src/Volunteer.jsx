@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import './Volunteer.css';
 import axios from 'axios';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import { io } from 'socket.io-client';
+import Swal from 'sweetalert2';
+
+const socket = io('http://localhost:5000'); 
 
 function Volunteer() {
   const [formData, setFormData] = useState({
@@ -16,61 +18,74 @@ function Volunteer() {
     longitude: ''
   });
 
-  useEffect(() => {
-    let map;
-    let marker;
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [volunteerId, setVolunteerId] = useState(null);
 
+  useEffect(() => {
     if (navigator.geolocation) {
-      navigator.geolocation.watchPosition(
+      const watchId = navigator.geolocation.watchPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
 
-          // Update form data state
-          setFormData((prevData) => ({
-            ...prevData,
+          setFormData((prev) => ({
+            ...prev,
             latitude,
             longitude
           }));
 
-          // Initialize or update Leaflet map
-          if (!map) {
-            map = L.map('map').setView([latitude, longitude], 15);
-
-            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-              attribution: '&copy; OpenStreetMap contributors',
-            }).addTo(map);
-
-            marker = L.marker([latitude, longitude])
-              .addTo(map)
-              .bindPopup("You are here")
-              .openPopup();
-          } else {
-            marker.setLatLng([latitude, longitude]);
-            map.setView([latitude, longitude]);
+          if (isRegistered && volunteerId) {
+            socket.emit('volunteerLocation', {
+              id: volunteerId,
+              latitude,
+              longitude
+            });
           }
-
-          // Send live location to backend
-          axios.post("http://localhost:5000/update-location", {
-            name: formData.name || "Unnamed Volunteer",
-            lat: latitude,
-            lng: longitude
-          }).catch((err) => console.error("Live location error:", err));
         },
-        (error) => {
-          console.error('Geolocation error:', error.message);
-          alert('Location access denied');
+        (err) => {
+          console.error('Location error:', err.message);
         },
-        { enableHighAccuracy: true }
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
       );
+
+      return () => navigator.geolocation.clearWatch(watchId);
     } else {
-      alert('Geolocation is not supported by your browser.');
+      alert('Geolocation not supported by your browser');
     }
-  }, [formData.name]); // Updates live tracking when name is filled
+  }, [isRegistered, volunteerId]);
+
+  useEffect(() => {
+    socket.on('taskRequest', ({ clientLat, clientLng, clientMessage }) => {
+      Swal.fire({
+        title: 'New Task Request',
+        text: clientMessage,
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonText: 'Accept',
+        cancelButtonText: 'Reject',
+        timer: 15000,
+        timerProgressBar: true,
+        willClose: () => {
+          socket.emit('taskRejected', { id: volunteerId });
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          socket.emit('taskAccepted', {
+            id: volunteerId,
+            latitude: formData.latitude,
+            longitude: formData.longitude
+          });
+          Swal.fire('Accepted!', 'You accepted the task.', 'success');
+        } else {
+          socket.emit('taskRejected', { id: volunteerId });
+        }
+      });
+    });
+  }, [formData.latitude, formData.longitude, volunteerId]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prevData) => ({
-      ...prevData,
+    setFormData((prev) => ({
+      ...prev,
       [name]: value
     }));
   };
@@ -80,16 +95,8 @@ function Volunteer() {
     try {
       await axios.post('http://localhost:5000/api/volunteer', formData);
       alert('Thank you for registering as a volunteer!');
-      setFormData({
-        name: '',
-        age: '',
-        phone: '',
-        email: '',
-        availability: '',
-        motivation: '',
-        latitude: '',
-        longitude: ''
-      });
+      setIsRegistered(true);
+      setVolunteerId(formData.phone);
     } catch (error) {
       console.error('Error submitting form:', error);
       alert('There was an error. Please try again.');
@@ -99,73 +106,30 @@ function Volunteer() {
   return (
     <div className="volunteer-page">
       <h2 className="volunteer-title">Join as a Volunteer</h2>
-
-      <div id="map" style={{ height: "400px", width: "100%", marginBottom: "20px" }}></div>
-
       <form className="volunteer-form" onSubmit={handleSubmit}>
-        <input
-          type="text"
-          name="name"
-          placeholder="Full Name"
-          value={formData.name}
-          onChange={handleChange}
-          required
-        />
-        <input
-          type="number"
-          name="age"
-          placeholder="Age"
-          value={formData.age}
-          onChange={handleChange}
-          required
-        />
-        <input
-          type="tel"
-          name="phone"
-          placeholder="Phone Number"
-          value={formData.phone}
-          onChange={handleChange}
-          required
-        />
-        <input
-          type="email"
-          name="email"
-          placeholder="Email"
-          value={formData.email}
-          onChange={handleChange}
-          required
-        />
-        <input
-          type="text"
-          name="availability"
-          placeholder="Availability (e.g., Weekends)"
-          value={formData.availability}
-          onChange={handleChange}
-        />
-        <textarea
-          name="motivation"
-          placeholder="Why do you want to volunteer?"
-          value={formData.motivation}
-          onChange={handleChange}
-        ></textarea>
+        <input type="file" name="photo" accept="image/*" onChange={(e) => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFormData((prevData) => ({
+            ...prevData,
+            photo: reader.result,
+        }));
+    };
+    if (file) {
+      reader.readAsDataURL(file);
+    }
+  }}
+/>
 
-        <input
-          type="text"
-          name="latitude"
-          placeholder="Latitude"
-          value={formData.latitude}
-          onChange={handleChange}
-          readOnly
-        />
-        <input
-          type="text"
-          name="longitude"
-          placeholder="Longitude"
-          value={formData.longitude}
-          onChange={handleChange}
-          readOnly
-        />
-
+        <input type="text" name="name" placeholder="Full Name" value={formData.name} onChange={handleChange} required />
+        <input type="number" name="age" placeholder="Age" value={formData.age} onChange={handleChange} required />
+        <input type="tel" name="phone" placeholder="Phone Number" value={formData.phone} onChange={handleChange} required />
+        <input type="email" name="email" placeholder="Email" value={formData.email} onChange={handleChange} required />
+        <input type="text" name="availability" placeholder="Availability (e.g., Weekends)" value={formData.availability} onChange={handleChange} />
+        <textarea name="motivation" placeholder="Why do you want to volunteer?" value={formData.motivation} onChange={handleChange}></textarea>
+        <input type="text" name="latitude" placeholder="Latitude" value={formData.latitude} readOnly />
+        <input type="text" name="longitude" placeholder="Longitude" value={formData.longitude} readOnly />
         <button type="submit">Submit</button>
       </form>
     </div>
