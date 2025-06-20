@@ -3,6 +3,7 @@
     "axiom": "^0.1.6",
     "axios": "^1.10.0",
     "leaflet": "^1.9.4",
-    "react-router-dom": "^7.6.0"
+    "react-router-dom": "^7.6.0",
+    "sweetalert2": "^11.6.13"
   }
 }
