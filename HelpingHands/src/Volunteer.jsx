@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import './Volunteer.css';
 import axios from 'axios';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 function Volunteer() {
   const [formData, setFormData] = useState({
@@ -15,24 +17,55 @@ function Volunteer() {
   });
 
   useEffect(() => {
+    let map;
+    let marker;
+
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
+      navigator.geolocation.watchPosition(
         (position) => {
+          const { latitude, longitude } = position.coords;
+
+          // Update form data state
           setFormData((prevData) => ({
             ...prevData,
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
+            latitude,
+            longitude
           }));
+
+          // Initialize or update Leaflet map
+          if (!map) {
+            map = L.map('map').setView([latitude, longitude], 15);
+
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+              attribution: '&copy; OpenStreetMap contributors',
+            }).addTo(map);
+
+            marker = L.marker([latitude, longitude])
+              .addTo(map)
+              .bindPopup("You are here")
+              .openPopup();
+          } else {
+            marker.setLatLng([latitude, longitude]);
+            map.setView([latitude, longitude]);
+          }
+
+          // Send live location to backend
+          axios.post("http://localhost:5000/update-location", {
+            name: formData.name || "Unnamed Volunteer",
+            lat: latitude,
+            lng: longitude
+          }).catch((err) => console.error("Live location error:", err));
         },
         (error) => {
           console.error('Geolocation error:', error.message);
           alert('Location access denied');
-        }
+        },
+        { enableHighAccuracy: true }
       );
     } else {
       alert('Geolocation is not supported by your browser.');
     }
-  }, []);
+  }, [formData.name]); // Updates live tracking when name is filled
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -66,6 +99,9 @@ function Volunteer() {
   return (
     <div className="volunteer-page">
       <h2 className="volunteer-title">Join as a Volunteer</h2>
+
+      <div id="map" style={{ height: "400px", width: "100%", marginBottom: "20px" }}></div>
+
       <form className="volunteer-form" onSubmit={handleSubmit}>
         <input
           type="text"
