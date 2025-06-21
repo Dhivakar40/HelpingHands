@@ -12,28 +12,25 @@ const server = http.createServer(app);
 const io = socketIO(server, {
   cors: {
     origin: '*',
-    methods: ['GET', 'POST']
-  }
+    methods: ['GET', 'POST'],
+  },
 });
 
 const PORT = 5000;
-
 
 const accountSid = process.env.TWILIO_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioPhone = 'whatsapp:' + process.env.TWILIO_PHONE;
 const twilioClient = twilio(accountSid, authToken);
 
-
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
-
-mongoose.connect(process.env.MONGO_URI)
+mongoose
+  .connect(process.env.MONGO_URI)
   .then(() => console.log('Connected to MongoDB Atlas'))
   .catch((err) => console.error('MongoDB connection error:', err));
-
 
 const VolunteerSchema = new mongoose.Schema({
   name: String,
@@ -44,13 +41,24 @@ const VolunteerSchema = new mongoose.Schema({
   motivation: String,
   latitude: Number,
   longitude: Number,
-  photo: String
+  photo: String,
 });
+
 const Volunteer = mongoose.model('volunteers', VolunteerSchema, 'volunteers');
 
+const liveLocations = new Map();
 
-io.on('connection', () => {
-  console.log('A client connected to socket.io');
+io.on('connection', (socket) => {
+  console.log('Socket client connected');
+
+  socket.on('volunteerLiveLocation', ({ phone, latitude, longitude }) => {
+    liveLocations.set(phone, { latitude, longitude });
+    console.log(`Live location updated for ${phone}:`, latitude, longitude);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected');
+  });
 });
 
 app.post('/api/volunteer', async (req, res) => {
@@ -73,9 +81,15 @@ app.post('/api/request-help', async (req, res) => {
     let nearest = null;
     let minDist = Infinity;
 
-    volunteers.forEach(vol => {
-      const volLat = parseFloat(vol.latitude);
-      const volLng = parseFloat(vol.longitude);
+    volunteers.forEach((vol) => {
+      let volLat = parseFloat(vol.latitude);
+      let volLng = parseFloat(vol.longitude);
+
+      const liveLoc = liveLocations.get(vol.phone);
+      if (liveLoc) {
+        volLat = liveLoc.latitude;
+        volLng = liveLoc.longitude;
+      }
 
       if (!isNaN(volLat) && !isNaN(volLng)) {
         const dist = Math.sqrt((lat - volLat) ** 2 + (lng - volLng) ** 2);
@@ -100,7 +114,7 @@ app.post('/api/request-help', async (req, res) => {
     await twilioClient.messages.create({
       from: twilioPhone,
       to: phoneWithWhatsApp,
-      body: `New Help Request: ${serviceType}\nLocation: (${lat}, ${lng})\nReply YES to accept or NO to decline.`
+      body: `New Help Request: ${serviceType}\nLocation: (${lat}, ${lng})\nReply YES to accept or NO to decline.`,
     });
 
     res.status(200).json({ message: 'Volunteer notified via WhatsApp.' });
@@ -110,9 +124,8 @@ app.post('/api/request-help', async (req, res) => {
   }
 });
 
-
 app.post('/whatsapp/reply', async (req, res) => {
-  console.log('Incoming WhatsApp Reply:', req.body);
+  console.log('WhatsApp Reply:', req.body);
   const incomingMsg = req.body.Body?.trim().toLowerCase();
   const from = req.body.From;
 
@@ -126,7 +139,7 @@ app.post('/whatsapp/reply', async (req, res) => {
       await twilioClient.messages.create({
         from: twilioPhone,
         to: from,
-        body: 'Thanks for accepting! The requester will be notified.'
+        body: 'Thanks for accepting!',
       });
 
       io.emit('volunteerAccepted', {
@@ -135,20 +148,20 @@ app.post('/whatsapp/reply', async (req, res) => {
         email: volunteer.email,
         latitude: volunteer.latitude,
         longitude: volunteer.longitude,
-        photo: volunteer.photo
+        photo: volunteer.photo,
       });
     } else {
       await twilioClient.messages.create({
         from: twilioPhone,
         to: from,
-        body: 'Could not find your details in the system.'
+        body: 'Could not find your details in the system.',
       });
     }
   } else if (incomingMsg === 'no') {
     await twilioClient.messages.create({
       from: twilioPhone,
       to: from,
-      body: 'You declined the request. We’ll notify someone else.'
+      body: 'You declined the request. We’ll notify someone else.',
     });
   }
 

@@ -16,11 +16,11 @@ const socket = io("https://f6cb-103-122-15-220.ngrok-free.app", {
 });
 
 socket.on('connect', () => {
-  console.log('✅ Socket.IO connected');
+  console.log('Socket.IO connected');
 });
 
 socket.on('connect_error', (err) => {
-  console.error('❌ Socket.IO connection error:', err.message);
+  console.error('Socket.IO connection error:', err.message);
 });
 
 
@@ -37,7 +37,7 @@ function Services() {
   }, []);
 
   socket.on('connect', () => {
-  console.log('✅ Connected to backend socket.io');
+  console.log('Connected to backend socket.io');
 });
 
   useEffect(() => {
@@ -46,6 +46,7 @@ function Services() {
     title: 'Volunteer Found!',
     html: `
       ${data.photo ? `<img src="${data.photo}" style="width:100px;height:100px;border-radius:50%;margin-bottom:10px;" />` : ''}
+      <br><br>
       <b>Name:</b> ${data.name}<br>
       <b>Phone:</b> ${data.phone}<br>
       <b>Email:</b> ${data.email}<br><br>

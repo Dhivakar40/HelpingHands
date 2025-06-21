@@ -2,6 +2,12 @@ import React, { useEffect, useState } from 'react';
 import './Volunteer.css';
 import axios from 'axios';
 import Swal from 'sweetalert2';
+import { io } from 'socket.io-client';
+
+const socket = io('https://f6cb-103-122-15-220.ngrok-free.app', {
+  transports: ['websocket'],
+  path: '/socket.io',
+});
 
 function Volunteer() {
   const [formData, setFormData] = useState({
@@ -22,15 +28,27 @@ function Volunteer() {
         (position) => {
           const { latitude, longitude } = position.coords;
           setFormData((prev) => ({ ...prev, latitude, longitude }));
+
+          if (formData.phone) {
+            socket.emit('volunteerLiveLocation', {
+              phone: formData.phone,
+              latitude,
+              longitude,
+            });
+          }
         },
         (err) => console.error('Location error:', err.message),
         { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
       );
-      return () => navigator.geolocation.clearWatch(watchId);
+
+      return () => {
+        navigator.geolocation.clearWatch(watchId);
+        socket.disconnect();
+      };
     } else {
       alert('Geolocation not supported by your browser');
     }
-  }, []);
+  }, [formData.phone]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
