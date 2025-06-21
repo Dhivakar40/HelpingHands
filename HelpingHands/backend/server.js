@@ -1,24 +1,31 @@
 require('dotenv').config();
-console.log('MONGO_URI is:', process.env.MONGO_URI);
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const twilio = require('twilio');
-const { urlencoded } = require('body-parser');
-const MessagingResponse = twilio.twiml.MessagingResponse;
+const http = require('http');
+const socketIO = require('socket.io');
 
 const app = express();
+const server = http.createServer(app);
+const io = socketIO(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
 const PORT = 5000;
 
 const accountSid = process.env.TWILIO_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
-const twilioPhone = process.env.TWILIO_PHONE;
+const twilioPhone = 'whatsapp:' + process.env.TWILIO_PHONE;
 const twilioClient = twilio(accountSid, authToken);
 
 app.use(cors());
 app.use(bodyParser.json());
-app.use(urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({ extended: false }));
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('Connected to MongoDB Atlas'))
@@ -33,84 +40,120 @@ const VolunteerSchema = new mongoose.Schema({
   motivation: String,
   latitude: Number,
   longitude: Number,
-  photo: String,
+  photo: String
 });
 
 const Volunteer = mongoose.model('volunteers', VolunteerSchema, 'volunteers');
 
+io.on('connection', (socket) => {
+  console.log('A client connected to socket.io');
+});
+
 app.post('/api/volunteer', async (req, res) => {
   try {
-    const newVolunteer = new Volunteer(req.body);
+    const newVolunteer = new Volunteer({
+  ...req.body,
+  photo: req.body.photo
+});
+
     await newVolunteer.save();
     res.status(200).json({ message: 'Volunteer registered successfully' });
   } catch (err) {
-    console.error('Volunteer save error:', err); 
+    console.error('Volunteer Registration Error:', err);
     res.status(500).json({ error: 'Failed to register volunteer' });
   }
 });
 
-let pendingRequests = {}; 
-
 app.post('/api/request-help', async (req, res) => {
   const { lat, lng, serviceType } = req.body;
+  console.log('Client location:', lat, lng);
+
   try {
     const volunteers = await Volunteer.find();
-    let minDist = Infinity;
     let nearest = null;
+    let minDist = Infinity;
 
     volunteers.forEach(vol => {
-      const dist = Math.sqrt(
-        Math.pow(lat - vol.latitude, 2) +
-        Math.pow(lng - vol.longitude, 2)
-      );
-      if (dist < minDist) {
-        minDist = dist;
-        nearest = vol;
+      const volLat = parseFloat(vol.latitude);
+      const volLng = parseFloat(vol.longitude);
+
+      if (!isNaN(volLat) && !isNaN(volLng)) {
+        const dist = Math.sqrt(Math.pow(lat - volLat, 2) + Math.pow(lng - volLng, 2));
+        if (dist < minDist) {
+          minDist = dist;
+          nearest = vol;
+        }
       }
     });
 
-    if (nearest && nearest.phone) {
-      const userId = Date.now();
-      pendingRequests[nearest.phone] = { lat, lng, serviceType, userId };
-
-      await twilioClient.messages.create({
-        body: `Help Request: ${serviceType}\nLocation: (${lat}, ${lng})\nReply YES to accept or NO to decline.`,
-        from: twilioPhone,
-        to: nearest.phone.startsWith('+') ? nearest.phone : '+91' + nearest.phone
-      });
-      res.status(200).json({ message: 'Volunteer notified via SMS.' });
-    } else {
-      res.status(404).json({ message: 'No volunteers available.' });
+    if (!nearest) {
+      return res.status(404).json({ message: 'No volunteers available. Try again later.' });
     }
+
+    let phoneDigits = nearest.phone.replace(/\D/g, '');
+    if (phoneDigits.length === 12 && phoneDigits.startsWith('91')) {
+      phoneDigits = phoneDigits.slice(2);
+    }
+
+    const phoneWithWhatsApp = 'whatsapp:+91' + phoneDigits;
+
+    await twilioClient.messages.create({
+      from: twilioPhone,
+      to: phoneWithWhatsApp,
+      body: `New Help Request: ${serviceType}\nLocation: (${lat}, ${lng})\nReply YES to accept or NO to decline.`
+    });
+
+    res.status(200).json({ message: 'Volunteer notified via WhatsApp.' });
   } catch (err) {
+    console.error('Help Request Error:', err);
     res.status(500).json({ error: 'Failed to process help request' });
   }
 });
 
-app.post('/sms/reply', async (req, res) => {
-  const userReply = req.body.Body.trim().toLowerCase();
-  const fromPhone = req.body.From.replace('+91', '');
+app.post('/whatsapp/reply', async (req, res) => {
+  console.log('Incoming WhatsApp Reply:', req.body);
+  const incomingMsg = req.body.Body?.trim().toLowerCase();
+  const from = req.body.From;
 
-  const twiml = new MessagingResponse();
+  if (!from) return res.sendStatus(400);
 
-  if (userReply === 'yes' && pendingRequests[fromPhone]) {
-    const volunteer = await Volunteer.findOne({ phone: fromPhone });
+  const phone = from.replace('whatsapp:+', '').slice(-10);
+  const volunteer = await Volunteer.findOne({ phone: { $regex: phone + '$' } });
+
+  if (incomingMsg === 'yes') {
     if (volunteer) {
-      
-      console.log(`Volunteer accepted: ${volunteer.name}`);
+      await twilioClient.messages.create({
+        from: twilioPhone,
+        to: from,
+        body: 'Thanks for accepting! The requester will be notified.'
+      });
+
+      io.emit('volunteerAccepted', {
+        name: volunteer.name,
+        phone: volunteer.phone,
+        email: volunteer.email,
+        latitude: volunteer.latitude,
+        longitude: volunteer.longitude,
+        photo: volunteer.photo
+      });
+    } else {
+      await twilioClient.messages.create({
+        from: twilioPhone,
+        to: from,
+        body: 'Could not find your details in the system.'
+      });
     }
-    twiml.message('Thanks! You are now connected with the requester.');
-    delete pendingRequests[fromPhone];
-  } else if (userReply === 'no') {
-    twiml.message('You declined the help request.');
-    delete pendingRequests[fromPhone];
-  } else {
-    twiml.message("Invalid response. Reply YES to accept or NO to decline.");
+  } else if (incomingMsg === 'no') {
+    await twilioClient.messages.create({
+      from: twilioPhone,
+      to: from,
+      body: 'You declined the request. We’ll notify someone else.'
+    });
   }
 
-  res.type('text/xml').send(twiml.toString());
+  res.send('<Response></Response>');
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
