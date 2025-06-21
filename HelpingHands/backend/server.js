@@ -18,18 +18,22 @@ const io = socketIO(server, {
 
 const PORT = 5000;
 
+
 const accountSid = process.env.TWILIO_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioPhone = 'whatsapp:' + process.env.TWILIO_PHONE;
 const twilioClient = twilio(accountSid, authToken);
 
+
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
+
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('Connected to MongoDB Atlas'))
   .catch((err) => console.error('MongoDB connection error:', err));
+
 
 const VolunteerSchema = new mongoose.Schema({
   name: String,
@@ -42,20 +46,16 @@ const VolunteerSchema = new mongoose.Schema({
   longitude: Number,
   photo: String
 });
-
 const Volunteer = mongoose.model('volunteers', VolunteerSchema, 'volunteers');
 
-io.on('connection', (socket) => {
+
+io.on('connection', () => {
   console.log('A client connected to socket.io');
 });
 
 app.post('/api/volunteer', async (req, res) => {
   try {
-    const newVolunteer = new Volunteer({
-  ...req.body,
-  photo: req.body.photo
-});
-
+    const newVolunteer = new Volunteer({ ...req.body });
     await newVolunteer.save();
     res.status(200).json({ message: 'Volunteer registered successfully' });
   } catch (err) {
@@ -78,7 +78,7 @@ app.post('/api/request-help', async (req, res) => {
       const volLng = parseFloat(vol.longitude);
 
       if (!isNaN(volLat) && !isNaN(volLng)) {
-        const dist = Math.sqrt(Math.pow(lat - volLat, 2) + Math.pow(lng - volLng, 2));
+        const dist = Math.sqrt((lat - volLat) ** 2 + (lng - volLng) ** 2);
         if (dist < minDist) {
           minDist = dist;
           nearest = vol;
@@ -109,6 +109,7 @@ app.post('/api/request-help', async (req, res) => {
     res.status(500).json({ error: 'Failed to process help request' });
   }
 });
+
 
 app.post('/whatsapp/reply', async (req, res) => {
   console.log('Incoming WhatsApp Reply:', req.body);

@@ -5,8 +5,15 @@ import Swal from 'sweetalert2';
 
 function Volunteer() {
   const [formData, setFormData] = useState({
-    name: '', age: '', phone: '', email: '',
-    availability: '', motivation: '', latitude: '', longitude: '', photo: ''
+    name: '',
+    age: '',
+    phone: '',
+    email: '',
+    availability: '',
+    motivation: '',
+    latitude: '',
+    longitude: '',
+    photo: ''
   });
 
   useEffect(() => {
@@ -14,7 +21,7 @@ function Volunteer() {
       const watchId = navigator.geolocation.watchPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          setFormData(prev => ({ ...prev, latitude, longitude }));
+          setFormData((prev) => ({ ...prev, latitude, longitude }));
         },
         (err) => console.error('Location error:', err.message),
         { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
@@ -27,7 +34,7 @@ function Volunteer() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -45,11 +52,16 @@ function Volunteer() {
     <div className="volunteer-page">
       <h2 className="volunteer-title">Join as a Volunteer</h2>
       <form className="volunteer-form" onSubmit={handleSubmit}>
-        <input type="file" name="photo" accept="image/*"
+        <input
+          type="file"
+          name="photo"
+          accept="image/*"
           onChange={(e) => {
             const file = e.target.files[0];
             const reader = new FileReader();
-            reader.onloadend = () => setFormData(prev => ({ ...prev, photo: reader.result }));
+            reader.onloadend = () => {
+              setFormData((prev) => ({ ...prev, photo: reader.result }));
+            };
             if (file) reader.readAsDataURL(file);
           }}
         />
