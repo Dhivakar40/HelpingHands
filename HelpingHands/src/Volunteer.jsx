@@ -60,10 +60,26 @@ function Volunteer() {
     try {
       await axios.post('http://localhost:5000/api/volunteer', formData);
       Swal.fire('Success!', 'Thank you for registering as a volunteer!', 'success');
-    } catch (error) {
-      console.error('Error submitting form:', error);
-      Swal.fire('Error', 'There was an error. Please try again.', 'error');
     }
+    
+    
+    catch (error) {
+  console.error('Axios Error:', error.message);
+  if (error.response) {
+    console.error('Response data:', error.response.data);
+    console.error('Status:', error.response.status);
+  } else if (error.request) {
+    console.error('No response received. Request:', error.request);
+  } else {
+    console.error('Error setting up the request:', error.message);
+  }
+
+  Swal.fire('Error', 'There was an error. Please try again.', 'error');
+}
+
+
+
+
   };
 
   return (
